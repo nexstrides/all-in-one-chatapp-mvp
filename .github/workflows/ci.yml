@@ -1,0 +1,32 @@
+name: Desktop CI
+on:
+  pull_request:
+  push:
+    branches: [main, "feat/**", "fix/**"]
+permissions:
+  contents: read
+jobs:
+  test-and-build:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      QT_QPA_PLATFORM: offscreen
+      RUN_WEBENGINE_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m ruff check src tests
+      - run: python -m ruff format --check src tests
+      - run: python -m mypy src
+      - run: python -m pytest --cov --cov-report=term-missing --cov-report=xml
+      - name: Build Windows application
+        run: python -m PyInstaller --noconfirm --clean --windowed --onedir --name AllInOneChatapp --collect-data allinone --collect-all windows_toasts packaging/entrypoint.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AllInOneChatapp-Windows-x64
+          path: dist/AllInOneChatapp/
+          retention-days: 7
