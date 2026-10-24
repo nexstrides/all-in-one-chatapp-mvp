@@ -1,0 +1,25 @@
+QMainWindow, QDialog { background: #f6f5fa; color: #242138; }
+QWidget { font-family: "Segoe UI", sans-serif; font-size: 13px; }
+QFrame#sidebar { background: #eeecf5; border-right: 1px solid #dedbe9; }
+QLabel#brand { font-size: 29px; font-weight: 750; color: #5834b5; }
+QLabel#eyebrow { color: #827a93; font-size: 9px; letter-spacing: 1px; }
+QLabel#heading { font-size: 19px; font-weight: 600; }
+QLabel#hero { font-size: 34px; font-weight: 700; color: #332749; padding: 18px; }
+QLabel#welcomeText { color: #746d83; font-size: 15px; padding: 10px; }
+QLabel#footnote { color: #837c93; font-size: 11px; line-height: 1.5; }
+QListWidget { background: transparent; border: none; outline: none; }
+QListWidget::item { border-radius: 8px; padding: 5px 10px; color: #514961; }
+QListWidget::item:selected { background: #e0d8f4; color: #5e3abc; font-weight: 600; }
+QListWidget::item:hover { background: #e7e3ef; }
+QPushButton { border: 1px solid #dfdbe8; border-radius: 7px; padding: 9px 12px;
+    background: #ffffff; color: #514961; }
+QPushButton:hover { background: #ece6f9; border-color: #b9a5df; }
+QPushButton:checked { background: #e0d8f4; color: #5e3abc; }
+QPushButton:focus { border: 2px solid #8463d0; }
+QPushButton#primary { background: #7653c9; color: white; border: none; font-weight: 600;
+    padding: 12px 18px; }
+QPushButton#primary:hover { background: #6541b7; }
+QLineEdit, QComboBox, QSpinBox { background: white; color: #242138; border: 1px solid #d8d2e4;
+    border-radius: 5px; padding: 8px; min-height: 20px; }
+QMenuBar, QMenu { background: #f6f5fa; color: #514961; }
+QMenu::item:selected { background: #e0d8f4; }
