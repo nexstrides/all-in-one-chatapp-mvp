@@ -25,8 +25,46 @@ jobs:
       - run: python -m pytest --cov --cov-report=term-missing --cov-report=xml
       - name: Build Windows application
         run: python -m PyInstaller --noconfirm --clean --windowed --onedir --name AllInOneChatapp --collect-data allinone --collect-all windows_toasts packaging/entrypoint.py
+      - name: Build per-user installer
+        shell: pwsh
+        run: |
+          $version = python -c "from allinone import __version__; print(__version__)"
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and "v$version" -ne $env:GITHUB_REF_NAME) {
+            throw "Tag and app version differ"
+          }
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" packaging/installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "Installer build failed" }
+          Compress-Archive -Path dist/AllInOneChatapp -DestinationPath dist/AllInOneChatapp-Windows-x64.zip
+          Get-ChildItem dist/*.zip,dist/*.exe | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)" | Add-Content dist/SHA256SUMS.txt
+          }
+      - name: Verify portable and installed executables start
+        shell: pwsh
+        run: |
+          function Test-AppLaunch([string]$path) {
+            $process = Start-Process -FilePath $path -ArgumentList "--version" -PassThru
+            if (-not $process.WaitForExit(30000)) {
+              $process.Kill()
+              throw "Application did not exit after its version check"
+            }
+            if ($process.ExitCode -ne 0) { throw "Application failed to start" }
+          }
+          Test-AppLaunch (Resolve-Path "dist/AllInOneChatapp/AllInOneChatapp.exe")
+          $installPath = Join-Path $env:RUNNER_TEMP "AllInOneChatapp-Smoke"
+          $arguments = @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=`"$installPath`"")
+          $installer = Start-Process -FilePath (Resolve-Path "dist/AllInOneChatapp-Setup.exe") -ArgumentList $arguments -PassThru
+          if (-not $installer.WaitForExit(180000)) {
+            $installer.Kill()
+            throw "Installer timed out"
+          }
+          if ($installer.ExitCode -ne 0) { throw "Installer failed" }
+          Test-AppLaunch (Join-Path $installPath "AllInOneChatapp.exe")
       - uses: actions/upload-artifact@v4
         with:
-          name: AllInOneChatapp-Windows-x64
-          path: dist/AllInOneChatapp/
-          retention-days: 7
+          name: AllInOneChatapp-v0.1.1-Windows-review
+          path: |
+            dist/AllInOneChatapp-Setup.exe
+            dist/AllInOneChatapp-Windows-x64.zip
+            dist/SHA256SUMS.txt
+          retention-days: 14
