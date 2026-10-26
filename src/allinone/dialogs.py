@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from allinone.models import PRESETS, Service
+from allinone.models import PRESETS, Service, slack_workspace_url
 from allinone.storage import History
 
 
@@ -38,6 +38,12 @@ class ServiceDialog(QDialog):
         self.kind.addItem("Custom HTTPS service", "custom")
         self.name = QLineEdit()
         self.url = QLineEdit()
+        self.url_label = QLabel("HTTPS URL")
+        self.workspace_hint = QLabel(
+            "Enter your team's Slack URL. Sign in inside the app, then choose "
+            "Use Slack in your browser if Slack offers to launch its desktop app."
+        )
+        self.workspace_hint.setWordWrap(True)
         self.notifications = QCheckBox("Receive notifications")
         self.always_on = QCheckBox("Keep service running in the background")
         self.sticky = QCheckBox("Show a persistent in-app alert")
@@ -51,7 +57,7 @@ class ServiceDialog(QDialog):
         for label, widget in [
             ("Service", self.kind),
             ("Account name", self.name),
-            ("HTTPS URL", self.url),
+            ("", self.url),
             ("Notifications", self.notifications),
             ("Background", self.always_on),
             ("Important", self.sticky),
@@ -59,7 +65,11 @@ class ServiceDialog(QDialog):
             ("Remind until opened", self.reminder),
             ("User agent override", self.agent),
         ]:
-            form.addRow(label, widget)
+            if widget is self.url:
+                form.addRow(self.url_label, widget)
+            else:
+                form.addRow(label, widget)
+        form.addRow(self.workspace_hint)
         note = QLabel(
             "To allow hibernation after 15 idle minutes, turn off notifications, "
             "background running, persistent alerts and reminders. Sleeping services "
@@ -77,7 +87,7 @@ class ServiceDialog(QDialog):
         if service:
             self.kind.setCurrentIndex(self.kind.findData(service.kind))
             self.kind.setEnabled(False)
-            self.url.setEnabled(False)
+            self.url.setEnabled(service.kind == "slack")
             self.name.setText(service.name)
             self.url.setText(service.url)
             self.notifications.setChecked(service.notifications)
@@ -90,11 +100,16 @@ class ServiceDialog(QDialog):
             self.notifications.setChecked(True)
             self.always_on.setChecked(True)
             self.preset_changed()
+        self.workspace_hint.setVisible(self.kind.currentData() == "slack")
 
     def preset_changed(self) -> None:
         preset = PRESETS.get(self.kind.currentData(), {})
+        is_slack = self.kind.currentData() == "slack"
+        self.url_label.setText("Workspace URL" if is_slack else "HTTPS URL")
+        self.workspace_hint.setVisible(is_slack)
+        self.url.setPlaceholderText("https://your-team.slack.com" if is_slack else "https://")
         self.name.setText(preset.get("name", ""))
-        self.url.setText(preset.get("url", "https://"))
+        self.url.setText("" if is_slack else preset.get("url", "https://"))
 
     def save(self) -> None:
         data = {
@@ -111,6 +126,8 @@ class ServiceDialog(QDialog):
         if self.service:
             data["id"] = self.service.id
         try:
+            if data["kind"] == "slack":
+                data["url"] = slack_workspace_url(str(data["url"]))
             self.result_service = Service(**data)
         except ValueError as exc:
             QMessageBox.warning(self, "Check service details", str(exc))
@@ -120,6 +137,7 @@ class ServiceDialog(QDialog):
 
 class HistoryDialog(QDialog):
     selected_service = Signal(str)
+    history_changed = Signal()
 
     def __init__(self, history: History, parent: QWidget) -> None:
         super().__init__(parent)
@@ -156,6 +174,7 @@ class HistoryDialog(QDialog):
         self.history.mark_opened(item_id)
         self.selected_service.emit(service_id)
         self.refresh()
+        self.history_changed.emit()
 
     def clear(self) -> None:
         if (
@@ -166,3 +185,4 @@ class HistoryDialog(QDialog):
         ):
             self.history.clear()
             self.refresh()
+            self.history_changed.emit()

@@ -4,7 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QContextMenuEvent, QDesktopServices
 from PySide6.QtWebEngineCore import (
     QWebEngineNewWindowRequest,
     QWebEngineNotification,
@@ -14,7 +14,7 @@ from PySide6.QtWebEngineCore import (
     QWebEngineSettings,
 )
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QDialog, QMenu, QVBoxLayout, QWidget
 
 from allinone.models import Service, internal_url, unread_from_title
 
@@ -99,6 +99,7 @@ class ServicePage(QWebEnginePage):
 class ServiceView(QWebEngineView):
     unread_changed = Signal(int)
     status_changed = Signal(str)
+    app_menu_requested = Signal(QMenu)
 
     def __init__(
         self,
@@ -145,6 +146,13 @@ class ServiceView(QWebEngineView):
 
     def clear_cache(self) -> None:
         self.account_profile.clearHttpCache()
+
+    def contextMenuEvent(self, event: QContextMenuEvent) -> None:
+        menu = self.createStandardContextMenu()
+        menu.addSeparator()
+        self.app_menu_requested.emit(menu)
+        menu.exec(event.globalPos())
+        menu.deleteLater()
 
     def dispose(self, finished: Callable[[], None] | None = None) -> None:
         if self.disposing:

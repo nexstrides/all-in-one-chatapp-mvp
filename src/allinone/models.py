@@ -1,5 +1,7 @@
 """Validated, Qt-independent configuration and policy."""
 
+import base64
+import binascii
 import re
 from dataclasses import asdict, dataclass, field
 from importlib.resources import files
@@ -8,6 +10,27 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 PRESETS = loads(files("allinone").joinpath("recipes/services.json").read_text(encoding="utf-8"))
+
+
+@dataclass
+class LocalProfile:
+    name: str = "My profile"
+    avatar_png: str = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name.strip() or len(self.name) > 60:
+            raise ValueError("Profile name must contain 1–60 characters.")
+        self.name = self.name.strip()
+        if not isinstance(self.avatar_png, str) or len(self.avatar_png) > 200_000:
+            raise ValueError("Profile picture is too large.")
+        if self.avatar_png:
+            try:
+                if not base64.b64decode(self.avatar_png, validate=True).startswith(
+                    b"\x89PNG\r\n\x1a\n"
+                ):
+                    raise ValueError("Choose a valid profile picture.")
+            except (ValueError, binascii.Error) as exc:
+                raise ValueError("Choose a valid profile picture.") from exc
 
 
 def validate_id(value: str) -> str:
@@ -38,6 +61,51 @@ def validate_url(value: str) -> str:
 def host_matches(host: str, domain: str) -> bool:
     host, domain = host.lower().rstrip("."), domain.lower().rstrip(".")
     return host == domain or host.endswith("." + domain)
+
+
+def slack_workspace_url(value: str) -> str:
+    """Accept a workspace address, never a generic landing or sign-in callback URL."""
+    value = value.strip()
+    if "://" not in value:
+        value = "https://" + value
+    parsed = urlsplit(validate_url(value))
+    host = (parsed.hostname or "").lower()
+    if parsed.port not in (None, 443):
+        raise ValueError("Use your Slack workspace's HTTPS address on the default port.")
+    if host == "app.slack.com":
+        match = re.fullmatch(r"/client/(T[A-Z0-9]+)(?:/.*)?", parsed.path)
+        if match:
+            return f"https://app.slack.com/client/{match[1]}"
+    else:
+        match = re.fullmatch(
+            r"([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)(?:\.enterprise)?\.slack\.com", host
+        )
+        if match and match[1] not in {
+            "www",
+            "api",
+            "app",
+            "my",
+            "help",
+            "status",
+            "slack",
+            "docs",
+            "slack-files",
+        }:
+            return f"https://{host}/"
+    raise ValueError(
+        "Enter your workspace URL, such as https://your-team.slack.com, "
+        "or a workspace link beginning https://app.slack.com/client/T…"
+    )
+
+
+def needs_slack_workspace(service: "Service") -> bool:
+    if service.kind != "slack":
+        return False
+    try:
+        slack_workspace_url(service.url)
+        return False
+    except ValueError:
+        return True
 
 
 @dataclass

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "all-in-one-chatapp"
-version = "0.1.0"
+version = "0.1.1"
 description = "Local Windows desktop workspace for isolated messaging accounts"
 requires-python = ">=3.12"
 dependencies = [
@@ -49,3 +49,4 @@ omit = ["*/app.py", "*/main_window.py", "*/service_view.py", "*/notifications.py
 [tool.coverage.report]
 fail_under = 70
 show_missing = true
+
