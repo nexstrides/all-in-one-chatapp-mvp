@@ -6,9 +6,10 @@ import shutil
 import sqlite3
 import tempfile
 import time
+from dataclasses import asdict
 from pathlib import Path
 
-from allinone.models import Service, validate_id
+from allinone.models import LocalProfile, Service, validate_id
 
 
 def data_directory() -> Path:
@@ -24,6 +25,7 @@ class Store:
         self.services: list[Service] = []
         self.pending_deletions: list[str] = []
         self.dnd = False
+        self.profile = LocalProfile()
         if self.path.exists():
             try:
                 data = json.loads(self.path.read_text(encoding="utf-8"))
@@ -35,6 +37,7 @@ class Store:
                 if len(set(ids)) != len(ids) or set(ids) & set(self.pending_deletions):
                     raise ValueError("Duplicate or deleted service")
                 self.dnd = data.get("dnd", False)
+                self.profile = LocalProfile(**data.get("profile", {}))
             except (ValueError, KeyError, TypeError) as exc:
                 raise ValueError(
                     "Settings are invalid. The existing file has been preserved; "
@@ -45,6 +48,7 @@ class Store:
         data = {
             "schema": 1,
             "dnd": self.dnd,
+            "profile": asdict(self.profile),
             "services": [s.to_dict() for s in self.services],
             "pending_deletions": self.pending_deletions,
         }
@@ -130,6 +134,19 @@ class History:
     def mark_opened(self, notification_id: int) -> None:
         with self.db:
             self.db.execute("UPDATE notifications SET opened=1 WHERE id=?", (notification_id,))
+
+    def unopened_counts(self) -> dict[str, int]:
+        return {
+            row["service_id"]: row["count"]
+            for row in self.db.execute(
+                "SELECT service_id, COUNT(*) AS count FROM notifications "
+                "WHERE opened=0 GROUP BY service_id"
+            )
+        }
+
+    def mark_service_opened(self, service_id: str) -> None:
+        with self.db:
+            self.db.execute("UPDATE notifications SET opened=1 WHERE service_id=?", (service_id,))
 
     def clear(self, service_id: str | None = None) -> None:
         with self.db:

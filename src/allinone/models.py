@@ -1,5 +1,7 @@
 """Validated, Qt-independent configuration and policy."""
 
+import base64
+import binascii
 import re
 from dataclasses import asdict, dataclass, field
 from importlib.resources import files
@@ -8,6 +10,27 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 PRESETS = loads(files("allinone").joinpath("recipes/services.json").read_text(encoding="utf-8"))
+
+
+@dataclass
+class LocalProfile:
+    name: str = "My profile"
+    avatar_png: str = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name.strip() or len(self.name) > 60:
+            raise ValueError("Profile name must contain 1–60 characters.")
+        self.name = self.name.strip()
+        if not isinstance(self.avatar_png, str) or len(self.avatar_png) > 200_000:
+            raise ValueError("Profile picture is too large.")
+        if self.avatar_png:
+            try:
+                if not base64.b64decode(self.avatar_png, validate=True).startswith(
+                    b"\x89PNG\r\n\x1a\n"
+                ):
+                    raise ValueError("Choose a valid profile picture.")
+            except (ValueError, binascii.Error) as exc:
+                raise ValueError("Choose a valid profile picture.") from exc
 
 
 def validate_id(value: str) -> str:

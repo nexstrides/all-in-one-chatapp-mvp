@@ -135,9 +135,9 @@ class NotificationCenter(QObject):
         item = self.pending.get(item_id)
         if not item:
             return
-        self.focus_service.emit(item.service.id)
         if item.notification:
             item.notification.click()
+        self.focus_service.emit(item.service.id)
         self.history.mark_opened(item_id)
         self.forget(item_id)
         self.changed.emit()

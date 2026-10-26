@@ -137,6 +137,7 @@ class ServiceDialog(QDialog):
 
 class HistoryDialog(QDialog):
     selected_service = Signal(str)
+    history_changed = Signal()
 
     def __init__(self, history: History, parent: QWidget) -> None:
         super().__init__(parent)
@@ -173,6 +174,7 @@ class HistoryDialog(QDialog):
         self.history.mark_opened(item_id)
         self.selected_service.emit(service_id)
         self.refresh()
+        self.history_changed.emit()
 
     def clear(self) -> None:
         if (
@@ -183,3 +185,4 @@ class HistoryDialog(QDialog):
         ):
             self.history.clear()
             self.refresh()
+            self.history_changed.emit()
