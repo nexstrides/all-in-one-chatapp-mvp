@@ -319,7 +319,7 @@ class MainWindow(QMainWindow):
             view.service = updated
             view.service_page.service = updated
             view.account_profile.setNotificationPresenter(lambda n: self.center.receive(updated, n))
-            if updated.user_agent != service.user_agent:
+            if updated.user_agent != service.user_agent or updated.url != service.url:
                 self.retire(service.id, lambda: self.focus_service(service.id))
         self.refresh_accounts()
         self.heading.setText(updated.name)

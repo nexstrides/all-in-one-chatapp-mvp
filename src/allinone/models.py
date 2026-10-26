@@ -40,6 +40,51 @@ def host_matches(host: str, domain: str) -> bool:
     return host == domain or host.endswith("." + domain)
 
 
+def slack_workspace_url(value: str) -> str:
+    """Accept a workspace address, never a generic landing or sign-in callback URL."""
+    value = value.strip()
+    if "://" not in value:
+        value = "https://" + value
+    parsed = urlsplit(validate_url(value))
+    host = (parsed.hostname or "").lower()
+    if parsed.port not in (None, 443):
+        raise ValueError("Use your Slack workspace's HTTPS address on the default port.")
+    if host == "app.slack.com":
+        match = re.fullmatch(r"/client/(T[A-Z0-9]+)(?:/.*)?", parsed.path)
+        if match:
+            return f"https://app.slack.com/client/{match[1]}"
+    else:
+        match = re.fullmatch(
+            r"([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)(?:\.enterprise)?\.slack\.com", host
+        )
+        if match and match[1] not in {
+            "www",
+            "api",
+            "app",
+            "my",
+            "help",
+            "status",
+            "slack",
+            "docs",
+            "slack-files",
+        }:
+            return f"https://{host}/"
+    raise ValueError(
+        "Enter your workspace URL, such as https://your-team.slack.com, "
+        "or a workspace link beginning https://app.slack.com/client/T…"
+    )
+
+
+def needs_slack_workspace(service: "Service") -> bool:
+    if service.kind != "slack":
+        return False
+    try:
+        slack_workspace_url(service.url)
+        return False
+    except ValueError:
+        return True
+
+
 @dataclass
 class Service:
     name: str
