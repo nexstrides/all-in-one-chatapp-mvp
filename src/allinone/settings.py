@@ -7,6 +7,7 @@ from PySide6.QtCore import QBuffer, QIODevice, QSize, Qt, Signal, SignalInstance
 from PySide6.QtGui import QImageReader
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -22,9 +23,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from allinone.icons import avatar_icon, symbol_icon
+from allinone.icons import avatar_icon, service_icon
 from allinone.models import LocalProfile
 from allinone.storage import Store
+from allinone.theme import THEME_CHOICES
 
 
 class ProfileDialog(QDialog):
@@ -139,6 +141,7 @@ class SettingsPage(QWidget):
         store: Store,
         set_dnd: Callable[[bool], None],
         set_startup: Callable[[bool], None],
+        set_theme: Callable[[str], None],
         parent: QWidget,
     ) -> None:
         super().__init__(parent)
@@ -166,6 +169,16 @@ class SettingsPage(QWidget):
         self.startup = QCheckBox("Start with Windows")
         self.startup.toggled.connect(set_startup)
         layout.addWidget(self.startup)
+        appearance = QHBoxLayout()
+        appearance.addWidget(QLabel("Appearance"))
+        self.theme = QComboBox()
+        self.theme.setAccessibleName("Appearance")
+        for choice, mode in THEME_CHOICES:
+            self.theme.addItem(choice, mode)
+        self.theme.currentIndexChanged.connect(lambda _index: set_theme(self.theme.currentData()))
+        appearance.addWidget(self.theme)
+        appearance.addStretch()
+        layout.addLayout(appearance)
         layout.addWidget(QLabel("Connected accounts"))
         self.accounts = QListWidget()
         self.accounts.setAccessibleName("Accounts in settings")
@@ -210,7 +223,7 @@ class SettingsPage(QWidget):
         service_id = current.data(Qt.ItemDataRole.UserRole) if current else None
         self.accounts.clear()
         for service in self.store.services:
-            item = QListWidgetItem(symbol_icon(service.kind), service.name)
+            item = QListWidgetItem(service_icon(service.kind), service.name)
             item.setSizeHint(QSize(250, 48))
             item.setData(Qt.ItemDataRole.UserRole, service.id)
             self.accounts.addItem(item)
@@ -224,3 +237,6 @@ class SettingsPage(QWidget):
             checkbox.setChecked(value)
             checkbox.blockSignals(False)
         self.startup.setEnabled(startup_enabled)
+        self.theme.blockSignals(True)
+        self.theme.setCurrentIndex(max(0, self.theme.findData(self.store.theme)))
+        self.theme.blockSignals(False)

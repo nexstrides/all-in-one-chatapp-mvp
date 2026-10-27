@@ -9,7 +9,7 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from allinone.models import LocalProfile, Service, validate_id
+from allinone.models import THEME_MODES, LocalProfile, Service, validate_id
 
 
 def data_directory() -> Path:
@@ -25,6 +25,7 @@ class Store:
         self.services: list[Service] = []
         self.pending_deletions: list[str] = []
         self.dnd = False
+        self.theme = "system"
         self.profile = LocalProfile()
         if self.path.exists():
             try:
@@ -38,6 +39,9 @@ class Store:
                     raise ValueError("Duplicate or deleted service")
                 self.dnd = data.get("dnd", False)
                 self.profile = LocalProfile(**data.get("profile", {}))
+                self.theme = data.get("theme", "system")
+                if self.theme not in THEME_MODES:
+                    raise ValueError("Unknown theme")
             except (ValueError, KeyError, TypeError) as exc:
                 raise ValueError(
                     "Settings are invalid. The existing file has been preserved; "
@@ -48,6 +52,7 @@ class Store:
         data = {
             "schema": 1,
             "dnd": self.dnd,
+            "theme": self.theme,
             "profile": asdict(self.profile),
             "services": [s.to_dict() for s in self.services],
             "pending_deletions": self.pending_deletions,

@@ -2,20 +2,10 @@
 
 import time
 from collections.abc import Callable
-from importlib.resources import files
 from typing import Any
 
 from PySide6.QtCore import QPoint, QSize, Qt, QTimer, QUrl
-from PySide6.QtGui import (
-    QAction,
-    QCloseEvent,
-    QColor,
-    QDesktopServices,
-    QIcon,
-    QPainter,
-    QPixmap,
-    QResizeEvent,
-)
+from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QDesktopServices, QResizeEvent
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -36,33 +26,17 @@ from PySide6.QtWidgets import (
 
 from allinone import autostart
 from allinone.dialogs import HistoryDialog, ServiceDialog
-from allinone.icons import avatar_icon, badge_icon, symbol_icon
+from allinone.icons import app_icon, avatar_icon, service_icon, symbol_icon
 from allinone.models import Service, can_hibernate, needs_slack_workspace
 from allinone.notifications import NotificationCenter
 from allinone.service_view import ServiceView
 from allinone.settings import ProfileDialog, SettingsPage
 from allinone.storage import History, Store
+from allinone.theme import THEME_CHOICES, ThemeManager, render_stylesheet
 from allinone.widgets import IconButton
 
-
-def app_icon(count: int = 0) -> QIcon:
-    pixmap = QPixmap(64, 64)
-    pixmap.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    painter.setBrush(QColor("#7653e6"))
-    painter.setPen(Qt.PenStyle.NoPen)
-    painter.drawRoundedRect(2, 2, 60, 60, 18, 18)
-    painter.setPen(QColor("white"))
-    font = painter.font()
-    font.setPixelSize(28 if count else 34)
-    font.setBold(True)
-    painter.setFont(font)
-    painter.drawText(
-        pixmap.rect(), Qt.AlignmentFlag.AlignCenter, str(min(count, 99)) if count else "a"
-    )
-    painter.end()
-    return QIcon(pixmap)
+STATE_ROLE = Qt.ItemDataRole.UserRole + 1
+REFRESH_COOLDOWN_MS = 150
 
 
 class MainWindow(QMainWindow):
@@ -76,15 +50,23 @@ class MainWindow(QMainWindow):
         self.statuses: dict[str, str] = {}
         self.retiring: set[str] = set()
         self.quitting = False
+        self.tray_unread = -1
+        self.refresh_pending = False
+        self.refresh_cooldown = QTimer(self)
+        self.refresh_cooldown.setSingleShot(True)
+        self.refresh_cooldown.setInterval(REFRESH_COOLDOWN_MS)
+        self.refresh_cooldown.timeout.connect(self.refresh_cooled)
         self.setWindowTitle("All in One Chatapp")
         self.setWindowIcon(app_icon())
         self.resize(1280, 830)
         self.setMinimumSize(850, 560)
-        self.setStyleSheet(files("allinone").joinpath("theme.qss").read_text())
+        self.theme = ThemeManager(store.theme, self)
+        self.setStyleSheet(render_stylesheet(self.theme.scheme))
         self.center = NotificationCenter(history, self)
         self.center.dnd = store.dnd
         self.center.focus_service.connect(self.focus_service)
         self.build_ui()
+        self.theme.changed.connect(self.apply_theme)
         self.build_tray()
         self.center.changed.connect(self.refresh_accounts)
         self.refresh_accounts()
@@ -234,6 +216,15 @@ class MainWindow(QMainWindow):
             menu.addSeparator()
         self.menu_action(menu, "Add service…", self.add_service)
         self.menu_action(menu, "App settings…", self.show_settings)
+        appearance = menu.addMenu("Appearance")
+        group = QActionGroup(appearance)
+        for title, mode in THEME_CHOICES:
+            choice = self.menu_action(
+                appearance, title, lambda _checked=False, m=mode: self.set_theme(m)
+            )
+            choice.setCheckable(True)
+            choice.setChecked(self.store.theme == mode)
+            group.addAction(choice)
         self.menu_action(menu, "Your profile…", self.show_profile)
         self.menu_action(menu, "Notification history", self.show_history)
         menu.addSeparator()
@@ -253,20 +244,43 @@ class MainWindow(QMainWindow):
 
     def show_settings(self) -> None:
         if self.settings_page is None:
-            self.settings_page = SettingsPage(self.store, self.set_dnd, self.toggle_startup, self)
+            self.settings_page = SettingsPage(
+                self.store, self.set_dnd, self.toggle_startup, self.set_theme, self
+            )
             self.settings_page.closed.connect(self.selection_changed)
             self.settings_page.edit_requested.connect(self.edit_selected_service)
             self.settings_page.remove_requested.connect(self.remove_selected_service)
             self.settings_page.profile_requested.connect(self.show_profile)
             self.settings_page.history_requested.connect(self.show_history)
             self.stack.addWidget(self.settings_page)
-        self.refresh_settings()
         self.stack.setCurrentWidget(self.settings_page)
+        self.refresh_settings()
         self.status.hide()
 
     def refresh_settings(self) -> None:
-        if self.settings_page:
+        # The page is rebuilt from the store each time it is opened, so skip it while hidden.
+        if self.settings_page and self.stack.currentWidget() is self.settings_page:
             self.settings_page.refresh(self.startup.isChecked(), self.startup.isEnabled())
+
+    def set_theme(self, mode: str) -> None:
+        if mode == self.store.theme:
+            return
+        previous = self.store.theme
+        self.store.theme = mode
+        try:
+            self.store.save()
+        except OSError as exc:
+            self.store.theme = previous
+            self.error(exc)
+            return
+        self.theme.set_mode(mode)
+        self.refresh_settings()
+
+    def apply_theme(self, scheme: str) -> None:
+        self.setStyleSheet(render_stylesheet(scheme))
+        self.add_button.setIcon(symbol_icon("add"))
+        self.history_button.setIcon(symbol_icon("bell"))
+        self.dnd_button.setIcon(symbol_icon("moon"))
 
     def edit_selected_service(self, service_id: str) -> None:
         self.focus_service(service_id)
@@ -322,6 +336,7 @@ class MainWindow(QMainWindow):
 
     def build_tray(self) -> None:
         self.tray = QSystemTrayIcon(app_icon(), self)
+        self.tray_unread = 0
         self.tray.setToolTip("All in One Chatapp")
         menu = QMenu(self)
         self.menu_action(menu, "Open app", self.show_window)
@@ -357,11 +372,23 @@ class MainWindow(QMainWindow):
         return next((s for s in self.store.services if s.id == service_id), None)
 
     def refresh_accounts(self) -> None:
+        """Bring the rail in line with the store, touching only what actually changed."""
         current = self.current_service()
         missed = self.history.unopened_counts()
+        services = self.store.services
+        rows = [self.accounts.item(i) for i in range(self.accounts.count())]
         self.accounts.blockSignals(True)
-        self.accounts.clear()
-        for service in self.store.services:
+        if [r.data(Qt.ItemDataRole.UserRole) for r in rows] != [s.id for s in services]:
+            self.accounts.clear()
+            rows = []
+            for service in services:
+                item = QListWidgetItem("")
+                item.setSizeHint(QSize(54, 56))
+                item.setData(Qt.ItemDataRole.UserRole, service.id)
+                self.accounts.addItem(item)
+                rows.append(item)
+            self.size_account_list()
+        for service, item in zip(services, rows, strict=True):
             count = max(self.badges.get(service.id, 0), missed.get(service.id, 0))
             tooltip = service.name
             if count:
@@ -370,27 +397,41 @@ class MainWindow(QMainWindow):
                 tooltip += " · Workspace URL required"
             elif service.id in self.statuses and service.id not in self.views:
                 tooltip += " · Sleeping"
-            item = QListWidgetItem(badge_icon(symbol_icon(service.kind), count), "")
-            item.setSizeHint(QSize(54, 56))
-            item.setToolTip(tooltip)
-            item.setData(Qt.ItemDataRole.AccessibleTextRole, tooltip)
-            item.setData(Qt.ItemDataRole.UserRole, service.id)
-            self.accounts.addItem(item)
-            if current and current.id == service.id:
+            state = f"{service.kind}|{count}|{tooltip}"  # A str survives Qt's QVariant round trip.
+            if item.data(STATE_ROLE) != state:
+                item.setData(STATE_ROLE, state)
+                item.setIcon(service_icon(service.kind, count))
+                item.setToolTip(tooltip)
+                item.setData(Qt.ItemDataRole.AccessibleTextRole, tooltip)
+            if current and current.id == service.id and self.accounts.currentItem() is not item:
                 self.accounts.setCurrentItem(item)
         self.accounts.blockSignals(False)
-        self.size_account_list()
-        total = sum(missed.get(service.id, 0) for service in self.store.services)
+        total = sum(missed.get(service.id, 0) for service in services)
         self.history_button.set_count(total)
         label = f"Notifications · {total} missed"
-        self.history_button.setToolTip(label)
-        self.history_button.setAccessibleName(label)
-        unread = sum(
-            max(self.badges.get(s.id, 0), missed.get(s.id, 0)) for s in self.store.services
-        )
-        self.tray.setIcon(badge_icon(app_icon(), unread))
-        self.tray.setToolTip(f"All in One Chatapp · {unread} unread / missed activity")
+        if self.history_button.accessibleName() != label:
+            self.history_button.setToolTip(label)
+            self.history_button.setAccessibleName(label)
+        unread = sum(max(self.badges.get(s.id, 0), missed.get(s.id, 0)) for s in services)
+        if unread != self.tray_unread:
+            self.tray_unread = unread
+            self.tray.setIcon(app_icon(unread))
+            self.tray.setToolTip(f"All in One Chatapp · {unread} unread / missed activity")
         self.refresh_settings()
+
+    def schedule_refresh(self) -> None:
+        """Title changes can arrive in bursts: refresh now, then coalesce the rest."""
+        if self.refresh_cooldown.isActive():
+            self.refresh_pending = True
+            return
+        self.refresh_accounts()
+        self.refresh_cooldown.start()
+
+    def refresh_cooled(self) -> None:
+        if self.refresh_pending:
+            self.refresh_pending = False
+            self.refresh_accounts()
+            self.refresh_cooldown.start()
 
     def ensure_view(self, service: Service) -> ServiceView | None:
         if needs_slack_workspace(service):
@@ -471,7 +512,7 @@ class MainWindow(QMainWindow):
         self.badges[service_id] = count
         if previous and not count:
             self.center.clear_service(service_id)
-        self.refresh_accounts()
+        self.schedule_refresh()
 
     def add_service(self) -> None:
         dialog = ServiceDialog(self)
@@ -506,7 +547,11 @@ class MainWindow(QMainWindow):
             view.service = updated
             view.service_page.service = updated
             view.account_profile.setNotificationPresenter(lambda n: self.center.receive(updated, n))
-            if updated.user_agent != service.user_agent or updated.url != service.url:
+            if (
+                updated.user_agent != service.user_agent
+                or updated.url != service.url
+                or updated.login_hint != service.login_hint
+            ):
                 self.retire(service.id, lambda: self.focus_service(service.id))
         self.refresh_accounts()
         if updated.url != service.url and not view:

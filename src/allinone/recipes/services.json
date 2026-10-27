@@ -3,6 +3,6 @@
   "telegram": {"name": "Telegram", "url": "https://web.telegram.org/", "domains": ["web.telegram.org"], "auth_domains": [], "color": "#239ad5"},
   "slack": {"name": "Slack", "url": "https://app.slack.com/", "domains": ["slack.com"], "auth_domains": ["accounts.google.com"], "color": "#8b5fa6"},
   "discord": {"name": "Discord", "url": "https://discord.com/app", "domains": ["discord.com"], "auth_domains": [], "color": "#5865f2"},
-  "gmail": {"name": "Gmail", "url": "https://mail.google.com/", "domains": ["mail.google.com"], "auth_domains": ["accounts.google.com"], "color": "#da6255"},
-  "outlook": {"name": "Outlook", "url": "https://outlook.live.com/mail/", "domains": ["outlook.live.com", "outlook.office.com", "outlook.office365.com"], "auth_domains": ["login.live.com", "login.microsoftonline.com"], "color": "#167ad0"}
+  "gmail": {"name": "Gmail", "url": "https://mail.google.com/", "domains": ["mail.google.com"], "auth_domains": ["accounts.google.com", "accounts.youtube.com", "myaccount.google.com", "consent.google.com"], "color": "#da6255"},
+  "outlook": {"name": "Outlook", "url": "https://outlook.live.com/mail/", "domains": ["outlook.live.com", "outlook.office.com", "outlook.office365.com"], "auth_domains": ["login.live.com", "login.microsoftonline.com", "login.microsoft.com", "account.live.com", "account.microsoft.com"], "color": "#167ad0"}
 }

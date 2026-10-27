@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.2 — speed, sign-in and look
+
+- Fix the slowdown introduced in 0.1.1: unchanged page titles no longer trigger work, sidebar
+  icons are cached and updated in place, bursts of title changes are coalesced, and the settings
+  page and tray icon are only redrawn when they changed.
+- Gmail and Outlook: report a browser identity without the embedded-engine token that Google
+  rejects, accept an optional email address that pre-fills the provider's own sign-in, widen the
+  allowed sign-in domains and explain Google's refusal page. Passwords are never read or stored.
+- New original icon set: rounded tiles with count badges, crisp on high-DPI screens.
+- Working light and dark themes with Match Windows, set in Settings or the Appearance menu.
+- Smoother sidebar buttons with a short hover fade.
+
 ## 0.1.1 — feedback review
 
 - Require a Slack workspace URL and offer repair for existing generic Slack accounts.

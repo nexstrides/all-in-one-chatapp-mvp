@@ -3,7 +3,7 @@
 A local Windows desktop workspace for your messenger and email accounts.
 Built with Python 3.12 and PySide6/Qt WebEngine. No app server or subscription is required.
 
-**v0.1.1 feedback review build.** Core behavior is implemented; live-provider compatibility and
+**v0.1.2 review build.** Core behavior is implemented; live-provider compatibility and
 Windows release acceptance remain manual gates. See [the smoke checklist](docs/windows-smoke-test.md).
 
 ## Run on Windows

@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from allinone.models import PRESETS, Service, slack_workspace_url
+from allinone.models import MAIL_KINDS, PRESETS, Service, slack_workspace_url
 from allinone.storage import History
 
 
@@ -53,10 +53,14 @@ class ServiceDialog(QDialog):
         self.reminder.setSuffix(" minutes")
         self.reminder.setSpecialValueText("Off")
         self.agent = QLineEdit()
-        self.agent.setPlaceholderText("Default Qt browser identity")
+        self.agent.setPlaceholderText("Default browser identity")
+        self.email = QLineEdit()
+        self.email.setPlaceholderText("you@example.com (optional)")
+        self.email_label = QLabel("Email address")
         for label, widget in [
             ("Service", self.kind),
             ("Account name", self.name),
+            ("", self.email),
             ("", self.url),
             ("Notifications", self.notifications),
             ("Background", self.always_on),
@@ -67,6 +71,8 @@ class ServiceDialog(QDialog):
         ]:
             if widget is self.url:
                 form.addRow(self.url_label, widget)
+            elif widget is self.email:
+                form.addRow(self.email_label, widget)
             else:
                 form.addRow(label, widget)
         form.addRow(self.workspace_hint)
@@ -96,15 +102,23 @@ class ServiceDialog(QDialog):
             self.bypass.setChecked(service.bypass_dnd)
             self.reminder.setValue(service.reminder_minutes)
             self.agent.setText(service.user_agent)
+            self.email.setText(service.login_hint)
         else:
             self.notifications.setChecked(True)
             self.always_on.setChecked(True)
             self.preset_changed()
         self.workspace_hint.setVisible(self.kind.currentData() == "slack")
+        self.show_email_field()
+
+    def show_email_field(self) -> None:
+        is_mail = self.kind.currentData() in MAIL_KINDS
+        self.email.setVisible(is_mail)
+        self.email_label.setVisible(is_mail)
 
     def preset_changed(self) -> None:
         preset = PRESETS.get(self.kind.currentData(), {})
         is_slack = self.kind.currentData() == "slack"
+        self.show_email_field()
         self.url_label.setText("Workspace URL" if is_slack else "HTTPS URL")
         self.workspace_hint.setVisible(is_slack)
         self.url.setPlaceholderText("https://your-team.slack.com" if is_slack else "https://")
@@ -122,6 +136,7 @@ class ServiceDialog(QDialog):
             "bypass_dnd": self.bypass.isChecked(),
             "reminder_minutes": self.reminder.value(),
             "user_agent": self.agent.text(),
+            "login_hint": self.email.text() if self.kind.currentData() in MAIL_KINDS else "",
         }
         if self.service:
             data["id"] = self.service.id
