@@ -173,8 +173,8 @@ class SettingsPage(QWidget):
         appearance.addWidget(QLabel("Appearance"))
         self.theme = QComboBox()
         self.theme.setAccessibleName("Appearance")
-        for title, mode in THEME_CHOICES:
-            self.theme.addItem(title, mode)
+        for choice, mode in THEME_CHOICES:
+            self.theme.addItem(choice, mode)
         self.theme.currentIndexChanged.connect(lambda _index: set_theme(self.theme.currentData()))
         appearance.addWidget(self.theme)
         appearance.addStretch()

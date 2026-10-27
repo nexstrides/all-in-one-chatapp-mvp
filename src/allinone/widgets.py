@@ -1,7 +1,7 @@
 """Compact accessible sidebar controls."""
 
-from PySide6.QtCore import QEnterEvent, QEvent, QRectF, QSize, Qt, QVariantAnimation
-from PySide6.QtGui import QColor, QIcon, QPainter, QPaintEvent, QResizeEvent
+from PySide6.QtCore import QEvent, QRectF, QSize, Qt, QVariantAnimation
+from PySide6.QtGui import QColor, QEnterEvent, QIcon, QPainter, QPaintEvent, QResizeEvent
 from PySide6.QtWidgets import QLabel, QPushButton, QWidget
 
 from allinone import theme
