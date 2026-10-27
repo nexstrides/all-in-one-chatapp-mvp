@@ -195,3 +195,37 @@ def test_profile_validation():
     for kwargs in [{"name": ""}, {"avatar_png": "not base64"}, {"avatar_png": "YQ=="}]:
         with pytest.raises(ValueError):
             LocalProfile(**kwargs)
+
+
+def test_title_bursts_are_coalesced_and_rail_updates_in_place(shell, monkeypatch):
+    a = add(shell)
+    add(shell, "gmail")
+    shell.refresh_cooldown.stop()
+    shell.refresh_pending = False
+    calls = []
+    original = shell.history.unopened_counts
+    monkeypatch.setattr(shell.history, "unopened_counts", lambda: calls.append(1) or original())
+    item = shell.accounts.item(0)
+    for count in range(1, 21):
+        shell.unread(a.id, count)
+    assert len(calls) == 1  # Leading edge only; the other 19 are pending.
+    assert shell.refresh_pending
+    shell.refresh_cooled()
+    assert len(calls) == 2
+    assert "20 unread" in shell.accounts.item(0).toolTip()
+    assert shell.accounts.item(0) is item  # Updated in place, not rebuilt.
+    shell.refresh_cooldown.stop()
+    shell.refresh_accounts()
+    assert shell.accounts.item(0) is item
+
+
+def test_theme_choice_persists_and_restyles(shell):
+    shell.set_theme("dark")
+    assert shell.theme.scheme == "dark"
+    assert Store(shell.store.root).theme == "dark"
+    assert "#14161f" in shell.styleSheet()
+    shell.set_theme("light")
+    assert "#f6f7fb" in shell.styleSheet()
+    menu = QMenu()
+    shell.populate_context_menu(menu)
+    assert "Appearance" in {a.text() for a in menu.actions()}

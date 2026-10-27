@@ -6,10 +6,16 @@ import re
 from dataclasses import asdict, dataclass, field
 from importlib.resources import files
 from json import loads
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit, urlunsplit
 from uuid import uuid4
 
 PRESETS = loads(files("allinone").joinpath("recipes/services.json").read_text(encoding="utf-8"))
+MAIL_KINDS = frozenset({"gmail", "outlook"})
+THEME_MODES = ("system", "light", "dark")
+EMAIL_PATTERN = re.compile(
+    r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?"
+    r"\.[A-Za-z]{2,63}"
+)
 
 
 @dataclass
@@ -108,6 +114,33 @@ def needs_slack_workspace(service: "Service") -> bool:
         return True
 
 
+def validate_email(value: str) -> str:
+    """Optional sign-in hint; the password is never requested or stored by this app."""
+    if not isinstance(value, str):
+        raise ValueError("Enter a valid email address, or leave it blank.")
+    value = value.strip()
+    if value and (len(value) > 254 or not EMAIL_PATTERN.fullmatch(value)):
+        raise ValueError("Enter a valid email address, or leave it blank.")
+    return value
+
+
+def browser_user_agent(default: str) -> str:
+    """Drop Qt's engine token: sign-in pages reject identities that name an embedded toolkit."""
+    cleaned = re.sub(r"\s+QtWebEngine/\S+", "", default).strip()
+    return cleaned or default
+
+
+def signin_rejected(url: str) -> bool:
+    """Recognise Google's refusal page from its address only; page content is never read."""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return False
+    return (parts.hostname or "").lower() == "accounts.google.com" and (
+        "/signin/rejected" in parts.path
+    )
+
+
 @dataclass
 class Service:
     name: str
@@ -120,6 +153,7 @@ class Service:
     bypass_dnd: bool = False
     reminder_minutes: int = 0
     user_agent: str = ""
+    login_hint: str = ""
 
     def __post_init__(self) -> None:
         validate_id(self.id)
@@ -136,9 +170,25 @@ class Service:
             raise ValueError("Reminder must be between 0 and 1440 minutes")
         if not isinstance(self.user_agent, str) or any(ord(c) < 32 for c in self.user_agent):
             raise ValueError("User agent must be a single line")
+        self.login_hint = validate_email(self.login_hint)
+        if self.login_hint and self.kind not in MAIL_KINDS:
+            raise ValueError("An email address applies only to mail services.")
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+def start_url(service: Service) -> str:
+    """First page to open. A mail address only pre-fills the provider's own sign-in."""
+    if not service.login_hint or service.kind not in MAIL_KINDS:
+        return service.url
+    parts = urlsplit(service.url)
+    path = parts.path
+    if service.kind == "gmail" and path in ("", "/"):
+        path = "/mail/"
+    key = "authuser" if service.kind == "gmail" else "login_hint"
+    query = f"{key}={quote(service.login_hint, safe='')}"
+    return urlunsplit((parts.scheme, parts.netloc, path or "/", query, ""))
 
 
 def internal_url(service: Service, value: str, *, allow_auth: bool = True) -> bool:

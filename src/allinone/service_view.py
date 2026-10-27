@@ -16,7 +16,14 @@ from PySide6.QtWebEngineCore import (
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QDialog, QMenu, QVBoxLayout, QWidget
 
-from allinone.models import Service, internal_url, unread_from_title
+from allinone.models import (
+    Service,
+    browser_user_agent,
+    internal_url,
+    signin_rejected,
+    start_url,
+    unread_from_title,
+)
 
 
 class ServicePage(QWebEnginePage):
@@ -123,26 +130,45 @@ class ServiceView(QWebEngineView):
         )
         # Push uses Qt's FCM transport; notifications still depend on provider/OS support.
         self.account_profile.setPushServiceEnabled(True)
-        if service.user_agent:
-            self.account_profile.setHttpUserAgent(service.user_agent)
+        # Google rejects embedded-browser identities, so drop the QtWebEngine token. An
+        # explicit per-account override always wins.
+        self.account_profile.setHttpUserAgent(
+            service.user_agent or browser_user_agent(self.account_profile.httpUserAgent())
+        )
         self.account_profile.setNotificationPresenter(lambda n: presenter(service, n))
         self.account_profile.downloadRequested.connect(lambda download: download.cancel())
         self.service_page = ServicePage(self.account_profile, service, self)
         self.service_page.blocked.connect(self.status_changed)
         self.setPage(self.service_page)
-        self.titleChanged.connect(lambda title: self.unread_changed.emit(unread_from_title(title)))
+        self.last_unread = -1
+        self.titleChanged.connect(self.title_changed)
         self.loadStarted.connect(lambda: self.status_changed.emit("Loading…"))
         self.loadFinished.connect(
             lambda ok: self.status_changed.emit(
                 "Connected" if ok else "Page did not load. Reload or open in your browser."
             )
         )
+        self.urlChanged.connect(self.url_changed)
         self.service_page.renderProcessTerminated.connect(
             lambda _status, _code: self.status_changed.emit(
                 "Service stopped. Select Reload to recover."
             )
         )
-        self.load(QUrl(service.url))
+        self.load(QUrl(start_url(service)))
+
+    def url_changed(self, url: QUrl) -> None:
+        if signin_rejected(url.toString()):
+            self.status_changed.emit(
+                "Google declined this sign-in. Use Open in browser to check the account, "
+                "or add a user agent override in account settings."
+            )
+
+    def title_changed(self, title: str) -> None:
+        # Pages rewrite their title constantly; only a changed count may touch the UI.
+        count = unread_from_title(title)
+        if count != self.last_unread:
+            self.last_unread = count
+            self.unread_changed.emit(count)
 
     def clear_cache(self) -> None:
         self.account_profile.clearHttpCache()

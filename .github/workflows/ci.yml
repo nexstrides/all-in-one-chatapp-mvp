@@ -62,7 +62,7 @@ jobs:
           Test-AppLaunch (Join-Path $installPath "AllInOneChatapp.exe")
       - uses: actions/upload-artifact@v4
         with:
-          name: AllInOneChatapp-v0.1.1-Windows-review
+          name: AllInOneChatapp-v0.1.2-Windows-review
           path: |
             dist/AllInOneChatapp-Setup.exe
             dist/AllInOneChatapp-Windows-x64.zip
