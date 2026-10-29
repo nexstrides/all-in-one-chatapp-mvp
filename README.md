@@ -3,6 +3,10 @@
 A local Windows desktop workspace for your messenger and email accounts.
 Built with Python 3.12 and PySide6/Qt WebEngine. No app server or subscription is required.
 
+**Who it's for:** people on Windows who juggle several chat and email accounts (WhatsApp,
+Telegram, Slack, Discord, Gmail, Outlook) and want them in one window, with separate sign-ins
+per account, one notification feed and Do Not Disturb, without a cloud service.
+
 **v0.1.1 feedback review build.** Core behavior is implemented; live-provider compatibility and
 Windows release acceptance remain manual gates. See [the smoke checklist](docs/windows-smoke-test.md).
 
@@ -121,9 +125,13 @@ version runs the release workflow, builds the Inno Setup installer and creates a
 release with SHA-256 checksums. The v0.1.0 pre-release remains available; the v0.1.1 changes are reviewed through a PR before publishing.
 
 Before public distribution, complete Windows smoke testing, code signing and third-party
-license/notice review. Project source licensing is intentionally undecided; PySide6 and
-its dependencies keep their own terms.
+license/notice review. PySide6 and its dependencies keep their own terms.
+
+Planned work is in [ROADMAP.md](ROADMAP.md).
 
 See [architecture decisions](docs/adr/0001-local-desktop.md),
 [security](SECURITY.md) and [release notes](docs/release-notes.md).
 
+## License
+
+[MIT](LICENSE) © 2026 nexstrides. Third-party packages, including PySide6/Qt, are under their own licenses.
